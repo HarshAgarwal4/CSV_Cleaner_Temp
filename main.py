@@ -49,7 +49,7 @@ def export_cleaned_data(data, output_path, export_format="csv"):
 
     if fmt == "csv":
         csv_file = base_path.with_suffix(".csv")
-        df.to_csv(csv_file, index=False)
+        df.to_csv(csv_file, index=False , encoding='utf-8')
         return csv_file
 
     elif fmt == "json":
