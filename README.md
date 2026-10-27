@@ -1,6 +1,6 @@
 # CSV Cleaner Application
 
-An automated data cleaning pipeline and interactive web interface built with Python, Pandas, and Streamlit to sanitize, deduplicate, and validate tabular CSV datasets.
+An automated data cleaning pipeline and interactive web interface built with Python, Pandas, and Streamlit to sanitize, deduplicate, validate, and export tabular CSV datasets to CSV and JSON formats.
 
 ---
 
@@ -20,8 +20,8 @@ An automated data cleaning pipeline and interactive web interface built with Pyt
      - **All**: Drop rows where all columns are empty.
      - **Required**: Drop rows only when a designated essential column is missing.
 4. **Summary & Export**:
-   - Generates detailed cleaning statistics (initial row count, duplicates dropped, nulls removed, and cleaned row count).
-   - Exports sanitized dataset and tracked removal reasons.
+   - Generates cleaning statistics (rows before/after, duplicates removed, nulls removed).
+   - Simple export to **CSV**, **JSON**, or **both**.
 
 ---
 
@@ -31,14 +31,15 @@ An automated data cleaning pipeline and interactive web interface built with Pyt
 week1-again/
 ├── Data/
 │   ├── sample_review.csv        # Sample input dataset
-│   └── cleaned_review.csv       # Output cleaned dataset
+│   ├── cleaned_review.csv       # Output cleaned dataset (CSV)
+│   └── cleaned_review.json      # Output cleaned dataset (JSON)
 ├── src/
 │   └── week1_again/
 │       └── __init__.py          # Package initialization
 ├── test/
 │   └── test_cleaner.py          # Unit & integration tests with logging
-├── app.py                       # Streamlit web interface
-├── main.py                      # Standalone CLI cleaning pipeline with retry mechanism
+├── app.py                       # Streamlit web interface with CSV/JSON/both download
+├── main.py                      # Standalone CLI cleaning & export pipeline
 ├── pyproject.toml               # Project metadata and dependencies
 ├── requirements.txt             # Pip dependencies
 └── README.md                    # Project documentation
@@ -46,80 +47,81 @@ week1-again/
 
 ---
 
-## 🚀 Getting Started
+## Setup Instructions
 
-### 1. Prerequisites
-- Python **3.12+**
-- Recommended: virtual environment (`venv` or `uv`)
-
-### 2. Setup Virtual Environment
-
+### 1. Clone the repository
 ```bash
-# Create virtual environment
-python -m venv .venv
-
-# Activate virtual environment
-# On Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
-# On macOS/Linux:
-source .venv/bin/activate
+git clone <YOUR_REPOSITORY_URL>
+cd <YOUR_PROJECT_FOLDER>
 ```
 
-### 3. Install Dependencies
+### 2. Install dependencies
+Make sure [uv](https://docs.astral.sh/uv/getting-started/installation/) is installed.
 
 ```bash
-pip install -r requirements.txt
+uv sync
+```
+This creates the virtual environment (.venv) and installs the dependencies defined in pyproject.toml and uv.lock.
+
+### 3. Run the application
+
+For the Python script:
+```bash
+uv run main.py
+```
+
+For the Streamlit application:
+```bash
+uv run streamlit run app.py
 ```
 
 ---
 
 ## 💻 Usage
 
-### Standalone CLI Cleaning Script (`main.py`)
-Run the standalone pipeline directly from the terminal to clean `Data/sample_review.csv` into `Data/cleaned_review.csv` and display a comparison summary:
+### Standalone CLI Cleaning & Export (`main.py`)
+Run the standalone pipeline directly from the terminal to clean `Data/sample_review.csv` into `Data/cleaned_review.csv` and `Data/cleaned_review.json`:
 
 ```bash
-python main.py
+uv run main.py
+```
+
+#### Simple Export in `main.py`:
+```python
+from main import export_cleaned_data, clean_csv
+
+# Clean and export to both CSV and JSON
+summary = clean_csv(
+    input_file="Data/sample_review.csv",
+    output_file="Data/cleaned_review.csv",
+    export_format="both",  # 'csv', 'json', or 'both'
+)
+
+# Or export an existing DataFrame / CSV file directly
+export_cleaned_data(
+    data="Data/cleaned_review.csv",
+    output_path="Data/exported_data",
+    export_format="json",  # 'csv', 'json', or 'both'
+)
 ```
 
 ### Streamlit Web Application (`app.py`)
 Launch the interactive web interface:
 
 ```bash
-streamlit run app.py
+uv run streamlit run app.py
 ```
 - Open your browser at `http://localhost:8501`.
 - Upload any `.csv` file.
-- Adjust pipeline settings (whitespace normalization, HTML stripping, duplicate removal, null handling rule).
-- Click **Clean CSV Now** to view data previews, row metrics, and download cleaned files.
+- Adjust pipeline settings and click **Clean CSV Now**.
+- Navigate to the **⬇️ Download Cleaned Data** tab to download your cleaned data in **CSV**, **JSON**, or **Both (CSV & JSON)**.
 
 ---
 
-## 🧪 Testing with Logging
+## 🧪 Testing
 
-Unit and integration tests are located in `test/test_cleaner.py` and utilize Python's standard `logging` and `unittest` modules.
-
-### Run Tests:
+Run tests with `unittest`:
 
 ```bash
-python test/test_cleaner.py
+uv run python -m unittest test/test_cleaner.py -v
 ```
-
-Or via unittest runner:
-
-```bash
-python -m unittest test/test_cleaner.py -v
-```
-
-### What is Tested:
-- **`clean_csv` Pipeline**:
-  - Full end-to-end cleaning (header trimming, HTML removal, deduplication, null removal).
-  - Exception handling when input and output file paths are identical.
-  - Automatic retry decorator handling transient I/O issues.
-- **`clean_dataframe` Logic**:
-  - Whitespace trimming and multi-space normalization.
-  - Duplicate detection and tracking in the removed records DataFrame.
-  - Null removal modes (`any`, `all`, and `required` column).
-  - Common text placeholder conversion (`NULL`, `None`, `NA`, empty strings).
-- **Execution Logging**:
-  - Each test logs setup, input states, transformation metrics, and assertion results.

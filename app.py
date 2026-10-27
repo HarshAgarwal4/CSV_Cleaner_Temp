@@ -1,5 +1,6 @@
 import re
 from io import BytesIO
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -116,7 +117,36 @@ def clean_dataframe(
 
 
 # =========================================================
-# 2. STREAMLIT USER INTERFACE
+# 2. CORE EXPORT FUNCTION (CSV, JSON, BOTH)
+# =========================================================
+def export_cleaned_data(df, export_format="csv"):
+    """
+    Simple function to export cleaned DataFrame to CSV or JSON format for download.
+    
+    Parameters:
+      df: Cleaned pandas DataFrame.
+      export_format: 'csv', 'json', or 'both'.
+
+    Returns:
+      Bytes of CSV/JSON data or a dict {'csv': bytes, 'json': bytes} if 'both'.
+    """
+    fmt = export_format.lower().strip()
+
+    if fmt == "csv":
+        return df.to_csv(index=False).encode("utf-8")
+    elif fmt == "json":
+        return df.to_json(orient="records", indent=2).encode("utf-8")
+    elif fmt == "both":
+        return {
+            "csv": df.to_csv(index=False).encode("utf-8"),
+            "json": df.to_json(orient="records", indent=2).encode("utf-8"),
+        }
+    else:
+        raise ValueError("export_format must be 'csv', 'json', or 'both'")
+
+
+# =========================================================
+# 3. STREAMLIT USER INTERFACE
 # =========================================================
 st.set_page_config(page_title="CSV Cleaner Pro", page_icon="🧹", layout="wide")
 
@@ -246,24 +276,59 @@ else:
             st.dataframe(cleaned_df.isna().sum().rename("Missing Count"))
 
         with tab_download:
-            st.write("**Download your cleaned files:**")
-            csv_data = BytesIO()
-            cleaned_df.to_csv(csv_data, index=False)
+            st.write("### ⬇️ Download Cleaned Data")
+            st.markdown("Choose whether to export your cleaned data to **CSV**, **JSON**, or **Both**:")
 
-            st.download_button(
-                "⬇️ Download Cleaned CSV",
-                data=csv_data.getvalue(),
-                file_name="cleaned_data.csv",
-                mime="text/csv",
-                use_container_width=True,
+            export_choice = st.radio(
+                "Select export format:",
+                ["CSV", "JSON", "Both (CSV & JSON)"],
+                horizontal=True,
             )
 
-            if not removed_df.empty:
-                removed_data = BytesIO()
-                removed_df.to_csv(removed_data, index=False)
+            if export_choice == "CSV":
+                csv_bytes = export_cleaned_data(cleaned_df, "csv")
                 st.download_button(
-                    "⬇️ Download Removed Rows CSV",
-                    data=removed_data.getvalue(),
+                    label="⬇️ Download Cleaned CSV",
+                    data=csv_bytes,
+                    file_name="cleaned_data.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            elif export_choice == "JSON":
+                json_bytes = export_cleaned_data(cleaned_df, "json")
+                st.download_button(
+                    label="⬇️ Download Cleaned JSON",
+                    data=json_bytes,
+                    file_name="cleaned_data.json",
+                    mime="application/json",
+                    use_container_width=True,
+                )
+            else:  # Both
+                both_data = export_cleaned_data(cleaned_df, "both")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button(
+                        label="⬇️ Download Cleaned CSV",
+                        data=both_data["csv"],
+                        file_name="cleaned_data.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                    )
+                with col2:
+                    st.download_button(
+                        label="⬇️ Download Cleaned JSON",
+                        data=both_data["json"],
+                        file_name="cleaned_data.json",
+                        mime="application/json",
+                        use_container_width=True,
+                    )
+
+            if not removed_df.empty:
+                st.divider()
+                st.write("**Removed Rows Log:**")
+                st.download_button(
+                    label="⬇️ Download Removed Rows (CSV)",
+                    data=export_cleaned_data(removed_df, "csv"),
                     file_name="removed_rows.csv",
                     mime="text/csv",
                     use_container_width=True,

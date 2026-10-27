@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+
 def retry(max_attempts=3, delay=1):
     """
     Automatically retries a function if a temporary error occurs
@@ -22,14 +23,59 @@ def retry(max_attempts=3, delay=1):
         return wrapper
     return decorator
 
+
+def export_cleaned_data(data, output_path, export_format="csv"):
+    """
+    Simple function to export cleaned data (DataFrame or CSV file) to CSV, JSON, or both.
+    
+    Parameters:
+      data: pd.DataFrame or path to a CSV file.
+      output_path: Target file path.
+      export_format: 'csv', 'json', or 'both'.
+    """
+    # 1. Get DataFrame (load from file if path given)
+    if isinstance(data, (str, Path)):
+        df = pd.read_csv(data)
+    else:
+        df = data
+
+    # 2. Prepare output path and folder
+    output_path = Path(output_path)
+    base_path = output_path.with_suffix("")
+    base_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 3. Handle export format
+    fmt = export_format.lower().strip()
+
+    if fmt == "csv":
+        csv_file = base_path.with_suffix(".csv")
+        df.to_csv(csv_file, index=False)
+        return csv_file
+
+    elif fmt == "json":
+        json_file = base_path.with_suffix(".json")
+        df.to_json(json_file, orient="records", indent=2)
+        return json_file
+
+    elif fmt == "both":
+        csv_file = base_path.with_suffix(".csv")
+        json_file = base_path.with_suffix(".json")
+        df.to_csv(csv_file, index=False)
+        df.to_json(json_file, orient="records", indent=2)
+        return {"csv": csv_file, "json": json_file}
+
+    else:
+        raise ValueError("export_format must be 'csv', 'json', or 'both'")
+
+
 @retry(max_attempts=3, delay=1)
-def clean_csv(input_file, output_file):
+def clean_csv(input_file, output_file, export_format="csv"):
     """
     Cleans a CSV file in 4 clear, sequential steps:
       1. Trim and strip whitespace
       2. Remove duplicate rows
       3. Remove null / empty rows
-      4. Save the cleaned CSV
+      4. Export cleaned data to CSV, JSON, or both
     """
     input_path = Path(input_file)
     output_path = Path(output_file)
@@ -44,10 +90,8 @@ def clean_csv(input_file, output_file):
     # -----------------------------------------------------
     # STEP 1: Trim & Strip Whitespace
     # -----------------------------------------------------
-    # 1a. Strip spaces from column headers (e.g. ' full_name ' -> 'full_name')
     df.columns = df.columns.str.strip()
 
-    # 1b. Helper function to clean text values
     def clean_text(value):
         if isinstance(value, str):
             # Remove HTML tags (e.g. <b>text</b> -> text)
@@ -56,7 +100,6 @@ def clean_csv(input_file, output_file):
             return re.sub(r"\s+", " ", value).strip()
         return value
 
-    # Apply text cleanup to every text/string column
     text_columns = df.select_dtypes(include=["object", "string"]).columns
     for col in text_columns:
         df[col] = df[col].map(clean_text)
@@ -64,8 +107,6 @@ def clean_csv(input_file, output_file):
     # -----------------------------------------------------
     # STEP 2: Remove Duplicates
     # -----------------------------------------------------
-    # Since whitespace was stripped in Step 1, rows that only
-    # differed by spaces are now exact matches and will be removed.
     rows_before_dedup = len(df)
     df = df.drop_duplicates()
     duplicates_removed = rows_before_dedup - len(df)
@@ -73,23 +114,19 @@ def clean_csv(input_file, output_file):
     # -----------------------------------------------------
     # STEP 3: Remove Nulls
     # -----------------------------------------------------
-    # 3a. Convert empty strings and common placeholder words into real NaN
     null_markers = ["", "NULL", "null", "None", "none", "nan", "NaN", "NA", "N/A"]
     df = df.replace(null_markers, np.nan)
     df = df.replace(r"^\s*$", np.nan, regex=True)
 
-    # 3b. Drop any rows containing missing/null values
     rows_before_null = len(df)
     df = df.dropna()
     null_rows_removed = rows_before_null - len(df)
 
     # -----------------------------------------------------
-    # STEP 4: Save Cleaned CSV
+    # STEP 4: Save / Export Cleaned Data
     # -----------------------------------------------------
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
+    exported = export_cleaned_data(df, output_path=output_path, export_format=export_format)
 
-    # Return a simple summary dictionary
     return {
         "original_rows": original_rows,
         "duplicates_removed": duplicates_removed,
@@ -97,6 +134,7 @@ def clean_csv(input_file, output_file):
         "cleaned_rows": len(df),
         "total_removed_rows": original_rows - len(df),
         "output_file": str(output_path),
+        "exported_files": exported,
         "remaining_nulls": df.isna().sum().to_dict(),
     }
 
@@ -106,10 +144,16 @@ def clean_csv(input_file, output_file):
 # =========================================================
 def compare_csv(original_file, cleaned_file):
     """
-    Compares the original and cleaned CSV files and displays a summary.
+    Compares the original and cleaned files (CSV or JSON) and displays a summary.
     """
-    original = pd.read_csv(original_file, skip_blank_lines=False)
-    cleaned = pd.read_csv(cleaned_file, skip_blank_lines=False)
+    original_path = Path(original_file)
+    cleaned_path = Path(cleaned_file)
+
+    original = pd.read_csv(original_path, skip_blank_lines=False)
+    if cleaned_path.suffix.lower() == ".json":
+        cleaned = pd.read_json(cleaned_path)
+    else:
+        cleaned = pd.read_csv(cleaned_path, skip_blank_lines=False)
 
     print("\n" + "=" * 50)
     print("           CSV CLEANING REPORT")
@@ -132,9 +176,11 @@ def compare_csv(original_file, cleaned_file):
 # =========================================================
 if __name__ == "__main__":
     try:
+        # Clean and export to both CSV and JSON formats
         summary = clean_csv(
             input_file="Data/sample_review.csv",
             output_file="Data/cleaned_review.csv",
+            export_format="both",
         )
         compare_csv(
             original_file="Data/sample_review.csv",
