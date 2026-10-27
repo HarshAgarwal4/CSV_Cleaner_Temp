@@ -251,3 +251,4 @@ class TestCleanerApplication(unittest.TestCase):
 if __name__ == "__main__":
     logger.info("Starting Cleaner Application Test Suite...")
     unittest.main(verbosity=2)
+
